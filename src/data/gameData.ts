@@ -77,6 +77,155 @@ export interface DiagnosisResult {
   errorType: 'action' | 'medicine' | 'funds' | null
 }
 
+export type ApprenticeSpecialty = 'examine' | 'feed' | 'repair'
+export type ApprenticeTaskType = 'examine' | 'feed' | 'repair'
+
+export interface Apprentice {
+  id: string
+  name: string
+  avatar: string
+  level: number
+  exp: number
+  specialty: ApprenticeSpecialty
+  proficiency: Record<ApprenticeTaskType, number>
+  stress: number
+  errorRate: number
+  status: 'idle' | 'working'
+  assignedTask: ApprenticeTaskType | null
+  taskStartTime: number | null
+  taskDuration: number
+  successes: number
+  failures: number
+}
+
+export interface ApprenticeTaskResult {
+  apprenticeId: string
+  apprenticeName: string
+  taskType: ApprenticeTaskType
+  success: boolean
+  expGained: number
+  stressChange: number
+  proficiencyGain: number
+  coinsReward: number
+  coinsPenalty: number
+  accidentType: ApprenticeAccidentType | null
+  message: string
+}
+
+export type ApprenticeAccidentType = 'overfeed' | 'misdiagnosis' | 'equipment_break' | 'stress_out'
+
+export function getSpecialtyName(s: ApprenticeSpecialty): string {
+  switch (s) {
+    case 'examine': return '诊断专精'
+    case 'feed': return '喂食专精'
+    case 'repair': return '维修专精'
+  }
+}
+
+export function getTaskName(t: ApprenticeTaskType): string {
+  switch (t) {
+    case 'examine': return '检查病患'
+    case 'feed': return '喂食照料'
+    case 'repair': return '维修设备'
+  }
+}
+
+export function getTaskEmoji(t: ApprenticeTaskType): string {
+  switch (t) {
+    case 'examine': return '🔍'
+    case 'feed': return '🍖'
+    case 'repair': return '🔧'
+  }
+}
+
+export const apprenticeAvatars = ['👨‍🔬', '👩‍🔬', '🧑‍⚕️', '👨‍🎓', '👩‍🎓', '🧑‍🔧']
+export const apprenticeNames = ['小星', '阿墨', '晓光', '铃兰', '铁蛋', '星云']
+
+export function generateInitialApprentices(): Apprentice[] {
+  const apprentices: Apprentice[] = [
+    {
+      id: 'apprentice_1',
+      name: '小星',
+      avatar: '👨‍🔬',
+      level: 1,
+      exp: 0,
+      specialty: 'examine',
+      proficiency: { examine: 30, feed: 10, repair: 10 },
+      stress: 0,
+      errorRate: 15,
+      status: 'idle',
+      assignedTask: null,
+      taskStartTime: null,
+      taskDuration: 0,
+      successes: 0,
+      failures: 0,
+    },
+    {
+      id: 'apprentice_2',
+      name: '阿墨',
+      avatar: '👩‍🔬',
+      level: 1,
+      exp: 0,
+      specialty: 'feed',
+      proficiency: { examine: 10, feed: 35, repair: 5 },
+      stress: 0,
+      errorRate: 12,
+      status: 'idle',
+      assignedTask: null,
+      taskStartTime: null,
+      taskDuration: 0,
+      successes: 0,
+      failures: 0,
+    },
+    {
+      id: 'apprentice_3',
+      name: '晓光',
+      avatar: '🧑‍🔧',
+      level: 1,
+      exp: 0,
+      specialty: 'repair',
+      proficiency: { examine: 5, feed: 5, repair: 40 },
+      stress: 0,
+      errorRate: 10,
+      status: 'idle',
+      assignedTask: null,
+      taskStartTime: null,
+      taskDuration: 0,
+      successes: 0,
+      failures: 0,
+    },
+  ]
+  return apprentices
+}
+
+export function getTaskBaseDuration(task: ApprenticeTaskType): number {
+  switch (task) {
+    case 'examine': return 8000
+    case 'feed': return 5000
+    case 'repair': return 12000
+  }
+}
+
+export function getTaskReward(task: ApprenticeTaskType): number {
+  switch (task) {
+    case 'examine': return 25
+    case 'feed': return 15
+    case 'repair': return 40
+  }
+}
+
+export function getTaskPenalty(task: ApprenticeTaskType): number {
+  switch (task) {
+    case 'examine': return 20
+    case 'feed': return 10
+    case 'repair': return 35
+  }
+}
+
+export function getExpPerLevel(): number {
+  return 100
+}
+
 export const breeds: Breed[] = [
   { id: 'slime', name: '黏液球', emoji: '🟢', color: '#00ff88', shape: 'blob' },
   { id: 'tentacle', name: '触手怪', emoji: '🟣', color: '#7b61ff', shape: 'tentacles' },

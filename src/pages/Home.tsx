@@ -7,7 +7,8 @@ import PlayerProgress from '@/components/PlayerProgress'
 import DiagnosisResult from '@/components/DiagnosisResult'
 import { useGameStore } from '@/store/useGameStore'
 import { getBreed } from '@/data/gameData'
-import { Cross, Zap, FlaskConical } from 'lucide-react'
+import { Cross, Zap, FlaskConical, Brain } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export default function Home() {
   const activeCaseId = useGameStore(s => s.activeCaseId)
@@ -38,6 +39,13 @@ export default function Home() {
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span>在线</span>
           </div>
+          <Link
+            to="/apprentice"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-900/30 border border-purple-700/30 text-purple-400 text-xs hover:bg-purple-900/50 transition-colors"
+          >
+            <Brain className="w-3 h-3" />
+            学徒培养
+          </Link>
           <button
             onClick={loadTestCases}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-900/30 border border-purple-700/30 text-purple-400 text-xs hover:bg-purple-900/50 transition-colors"

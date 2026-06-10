@@ -7,12 +7,22 @@ import {
   type DiagnosisResult,
   type ActionType,
   type AccidentType,
+  type Apprentice,
+  type ApprenticeTaskType,
+  type ApprenticeTaskResult,
+  type ApprenticeAccidentType,
   initialEquipment,
   generatePetCase,
   generateInitialCases,
   generateTestCases,
   getDisease,
   getMedicine,
+  generateInitialApprentices,
+  getTaskName,
+  getTaskBaseDuration,
+  getTaskReward,
+  getTaskPenalty,
+  getExpPerLevel,
 } from '@/data/gameData'
 
 interface GameState {
@@ -27,6 +37,9 @@ interface GameState {
   selectedMedicineId: string | null
   showMedicineSelector: boolean
   pendingAction: 'medicate' | 'inject' | 'feed' | null
+  apprentices: Apprentice[]
+  apprenticeTaskResult: ApprenticeTaskResult | null
+  showApprenticeResult: boolean
 
   selectCase: (id: string) => void
   examine: () => void
@@ -43,6 +56,11 @@ interface GameState {
   generateNewCase: () => void
   loadTestCases: () => void
   resetGame: () => void
+  assignApprenticeTask: (apprenticeId: string, task: ApprenticeTaskType) => void
+  completeApprenticeTask: (apprenticeId: string) => void
+  dismissApprenticeResult: () => void
+  restApprentice: (apprenticeId: string) => void
+  tickApprentices: () => void
 }
 
 const initialPlayer: Player = {
@@ -100,6 +118,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectedMedicineId: null,
   showMedicineSelector: false,
   pendingAction: null,
+  apprentices: generateInitialApprentices(),
+  apprenticeTaskResult: null,
+  showApprenticeResult: false,
 
   selectCase: (id: string) => {
     const state = get()
@@ -414,6 +435,227 @@ export const useGameStore = create<GameState>((set, get) => ({
       showMedicineSelector: false,
       selectedMedicineId: null,
       pendingAction: null,
+      apprentices: generateInitialApprentices(),
+      apprenticeTaskResult: null,
+      showApprenticeResult: false,
+    })
+  },
+
+  assignApprenticeTask: (apprenticeId: string, task: ApprenticeTaskType) => {
+    const state = get()
+    const apprentice = state.apprentices.find(a => a.id === apprenticeId)
+    if (!apprentice || apprentice.status === 'working') return
+    if (apprentice.stress >= 90) return
+
+    const baseDuration = getTaskBaseDuration(task)
+    const proficiencyBonus = apprentice.proficiency[task] * 30
+    const stressPenalty = apprentice.stress * 20
+    const duration = Math.max(2000, baseDuration - proficiencyBonus + stressPenalty)
+
+    set({
+      apprentices: state.apprentices.map(a =>
+        a.id === apprenticeId
+          ? {
+              ...a,
+              status: 'working',
+              assignedTask: task,
+              taskStartTime: Date.now(),
+              taskDuration: duration,
+            }
+          : a
+      ),
+    })
+  },
+
+  completeApprenticeTask: (apprenticeId: string) => {
+    const state = get()
+    const apprentice = state.apprentices.find(a => a.id === apprenticeId)
+    if (!apprentice || apprentice.status !== 'working' || !apprentice.assignedTask) return
+
+    const task = apprentice.assignedTask
+    const proficiency = apprentice.proficiency[task]
+    const specialtyBonus = apprentice.specialty === task ? 15 : 0
+    const stressPenalty = apprentice.stress * 0.3
+    const effectiveErrorRate = Math.max(1, apprentice.errorRate - proficiency * 0.3 - specialtyBonus + stressPenalty)
+
+    const roll = Math.random() * 100
+    const success = roll > effectiveErrorRate
+
+    let accidentType: ApprenticeAccidentType | null = null
+    let message = ''
+    const expPerLevel = getExpPerLevel()
+
+    if (success) {
+      const expGain = 15 + Math.floor(proficiency / 5)
+      const proficiencyGain = 3 + (apprentice.specialty === task ? 2 : 0)
+      const stressChange = 8
+      const coinsReward = getTaskReward(task)
+      let newExp = apprentice.exp + expGain
+      let newLevel = apprentice.level
+      if (newExp >= expPerLevel) {
+        newLevel += 1
+        newExp = newExp - expPerLevel
+      }
+
+      message = `${apprentice.name} 完成了「${getTaskName(task)}」！熟练度+${proficiencyGain}，经验+${expGain}，获得 ${coinsReward} ⬡`
+
+      set({
+        apprentices: state.apprentices.map(a =>
+          a.id === apprenticeId
+            ? {
+                ...a,
+                status: 'idle',
+                assignedTask: null,
+                taskStartTime: null,
+                taskDuration: 0,
+                level: newLevel,
+                exp: newExp,
+                proficiency: {
+                  ...a.proficiency,
+                  [task]: Math.min(100, a.proficiency[task] + proficiencyGain),
+                },
+                stress: Math.min(100, a.stress + stressChange),
+                errorRate: Math.max(2, a.errorRate - 0.2),
+                successes: a.successes + 1,
+              }
+            : a
+        ),
+        player: {
+          ...state.player,
+          coins: state.player.coins + coinsReward,
+        },
+        apprenticeTaskResult: {
+          apprenticeId,
+          apprenticeName: apprentice.name,
+          taskType: task,
+          success: true,
+          expGained: expGain,
+          stressChange,
+          proficiencyGain,
+          coinsReward,
+          coinsPenalty: 0,
+          accidentType: null,
+          message,
+        },
+        showApprenticeResult: true,
+      })
+    } else {
+      const coinsPenalty = getTaskPenalty(task)
+      const proficiencyGain = 1
+      const stressChange = 20
+      const expGain = 5
+
+      if (task === 'feed') accidentType = 'overfeed'
+      else if (task === 'examine') accidentType = 'misdiagnosis'
+      else if (task === 'repair') accidentType = 'equipment_break'
+
+      if (apprentice.stress > 75 && Math.random() < 0.3) {
+        accidentType = 'stress_out'
+      }
+
+      let accidentMsg = ''
+      switch (accidentType) {
+        case 'overfeed':
+          accidentMsg = '宠物被喂得太饱了，正在打嗝冒泡...'
+          break
+        case 'misdiagnosis':
+          accidentMsg = '诊断报告写错了，需要重新检查！'
+          break
+        case 'equipment_break':
+          accidentMsg = '维修时手滑，把零件弄掉了！'
+          break
+        case 'stress_out':
+          accidentMsg = '学徒压力太大，跑去休息了...'
+          break
+      }
+
+      message = `${apprentice.name} 在「${getTaskName(task)}」中出了差错！${accidentMsg}（损失 ${coinsPenalty} ⬡）`
+
+      const updatedEquipment = accidentType === 'equipment_break'
+        ? (() => {
+            const damagedEquip = state.equipment
+              .filter(e => e.status === 'normal')
+              .sort(() => Math.random() - 0.5)[0]
+            if (!damagedEquip) return state.equipment
+            return state.equipment.map(e =>
+              e.id === damagedEquip.id ? { ...e, status: 'damaged' as const } : e
+            )
+          })()
+        : state.equipment
+
+      set({
+        apprentices: state.apprentices.map(a =>
+          a.id === apprenticeId
+            ? {
+                ...a,
+                status: 'idle',
+                assignedTask: null,
+                taskStartTime: null,
+                taskDuration: 0,
+                exp: a.exp + expGain,
+                proficiency: {
+                  ...a.proficiency,
+                  [task]: Math.min(100, a.proficiency[task] + proficiencyGain),
+                },
+                stress: Math.min(100, a.stress + stressChange),
+                failures: a.failures + 1,
+              }
+            : a
+        ),
+        equipment: updatedEquipment,
+        player: {
+          ...state.player,
+          coins: Math.max(0, state.player.coins - coinsPenalty),
+        },
+        apprenticeTaskResult: {
+          apprenticeId,
+          apprenticeName: apprentice.name,
+          taskType: task,
+          success: false,
+          expGained: expGain,
+          stressChange,
+          proficiencyGain,
+          coinsReward: 0,
+          coinsPenalty,
+          accidentType,
+          message,
+        },
+        showApprenticeResult: true,
+      })
+    }
+  },
+
+  dismissApprenticeResult: () => {
+    set({
+      apprenticeTaskResult: null,
+      showApprenticeResult: false,
+    })
+  },
+
+  restApprentice: (apprenticeId: string) => {
+    const state = get()
+    const apprentice = state.apprentices.find(a => a.id === apprenticeId)
+    if (!apprentice || apprentice.status === 'working') return
+
+    set({
+      apprentices: state.apprentices.map(a =>
+        a.id === apprenticeId
+          ? {
+              ...a,
+              stress: Math.max(0, a.stress - 30),
+            }
+          : a
+      ),
+    })
+  },
+
+  tickApprentices: () => {
+    const state = get()
+    const now = Date.now()
+    state.apprentices.forEach(a => {
+      if (a.status === 'working' && a.taskStartTime && now >= a.taskStartTime + a.taskDuration) {
+        get().completeApprenticeTask(a.id)
+      }
     })
   },
 }))
